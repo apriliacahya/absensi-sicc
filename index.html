@@ -1,0 +1,929 @@
+
+<!doctype html>
+<html class="h-full" lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance & Leave Management</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
+    * { font-family: 'DM Sans', sans-serif; }
+    .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: 600; }
+    .tab-inactive { border-bottom: 3px solid transparent; color: #64748b; }
+    .toast { animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-overlay { background: rgba(0,0,0,0.5); animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body class="h-full bg-slate-50 overflow-hidden">
+
+  <div id="app" class="h-full w-full flex flex-col">
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="h-full flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+        <div class="text-center mb-8">
+          <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="music" style="width:32px;height:32px" class="text-blue-600"></i></div>
+          <h1 class="text-2xl font-bold text-slate-800">Attendance Portal</h1>
+          <p class="text-sm text-slate-500 mt-1">Sign in to continue</p>
+        </div>
+        <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+          <div><label class="block text-sm font-medium text-slate-600 mb-1">Email</label> <input type="email" id="login-email" placeholder="your@email.com" required class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"></div>
+          <div><label class="block text-sm font-medium text-slate-600 mb-1">Full Name</label> <input type="text" id="login-name" placeholder="Your full name" required class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"></div>
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all">Sign In / Register</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="main-app" class="hidden h-full w-full flex flex-col">
+      <!-- Header -->
+      <header class="bg-white border-b border-slate-200 px-6 py-4 z-20 flex-shrink-0">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 id="app-title" class="text-xl font-bold text-slate-800">Attendance Portal</h1>
+            <p id="user-info" class="text-sm text-slate-500 mt-0.5">Welcome, <span id="user-name" class="font-semibold text-slate-700"></span> (<span id="user-role" class="font-medium"></span>)</p>
+          </div>
+          <button onclick="logout()" class="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-all"><i data-lucide="log-out" style="width:16px;height:16px"></i> Logout </button>
+        </div>
+      </header>
+
+      <!-- SINGER VIEW -->
+      <div id="singer-view" class="hidden flex-1 w-full flex flex-col overflow-hidden">
+        <!-- Tabs -->
+        <nav class="bg-white px-6 flex gap-4 border-b border-slate-100 overflow-x-auto flex-shrink-0">
+          <button id="tab-attendance" class="py-3 text-sm tab-active transition-all whitespace-nowrap" onclick="switchTab('attendance')"> <span class="flex items-center gap-2"><i data-lucide="clock" style="width:16px;height:16px"></i> Absensi</span> </button>
+          <button id="tab-singer-schedule" class="py-3 text-sm tab-inactive transition-all whitespace-nowrap" onclick="switchTab('singer-schedule')"> <span class="flex items-center gap-2"><i data-lucide="calendar" style="width:16px;height:16px"></i> Jadwal</span> </button>
+          <button id="tab-leave" class="py-3 text-sm tab-inactive transition-all whitespace-nowrap" onclick="switchTab('leave')"> <span class="flex items-center gap-2"><i data-lucide="file-text" style="width:16px;height:16px"></i> Pengajuan Izin</span> </button>
+          <button id="tab-history" class="py-3 text-sm tab-inactive transition-all whitespace-nowrap" onclick="switchTab('history')"> <span class="flex items-center gap-2"><i data-lucide="history" style="width:16px;height:16px"></i> Riwayat</span> </button>
+        </nav>
+        <!-- Content -->
+        <div class="flex-1 overflow-auto">
+          <!-- Attendance Section -->
+          <section id="section-attendance" class="p-6">
+            <div class="max-w-lg mx-auto">
+              <h2 class="text-lg font-semibold text-slate-700 mb-4">Absensi Hari Ini</h2>
+              <div id="current-schedule-info" class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg mb-4 hidden"></div>
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+                <div class="text-center">
+                  <p class="text-sm text-slate-500">Waktu Saat Ini</p>
+                  <p id="live-clock" class="text-3xl font-bold text-slate-800 tracking-wider">--:--:--</p>
+                  <p id="live-date" class="text-sm text-slate-500"></p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-600 mb-2">Foto Validasi</label>
+                  <div onclick="document.getElementById('photo-input-attendance').click()" id="photo-area" class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+                    <img id="photo-preview-attendance" class="hidden max-h-32 mx-auto mb-2 rounded"/>
+                    <i id="photo-icon-attendance" data-lucide="camera" style="width:32px;height:32px;margin:0 auto;" class="text-slate-400 mb-2"></i>
+                    <p id="photo-text" class="text-sm text-slate-500">Ambil/Upload Foto</p>
+                  </div>
+                  <input type="file" id="photo-input-attendance" accept="image/*" class="hidden">
+                </div>
+                <button id="btn-submit-att" onclick="submitAttendance()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all flex items-center justify-center gap-2 disabled:bg-slate-400">
+                  <i data-lucide="check-circle" style="width:18px;height:18px"></i> Submit Absensi
+                </button>
+              </div>
+            </div>
+          </section>
+          <!-- Singer Schedule Section -->
+          <section id="section-singer-schedule" class="p-6 hidden">
+            <div class="max-w-lg mx-auto">
+              <h2 class="text-lg font-semibold text-slate-700 mb-4">Jadwal Latihan</h2>
+              <div id="singer-schedule-list" class="space-y-3"><p class="text-sm text-slate-400 text-center py-8">Belum ada jadwal.</p></div>
+            </div>
+          </section>
+          <!-- Leave Section -->
+          <section id="section-leave" class="p-6 hidden">
+             <div class="max-w-lg mx-auto">
+                <h2 class="text-lg font-semibold text-slate-700 mb-4">Pengajuan Izin</h2>
+                <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4">
+                    <div><label for="leave-type" class="block text-sm font-medium text-slate-600 mb-1">Jenis Izin</label> <select id="leave-type" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"> <option value="">Pilih jenis...</option> <option value="sick">Sakit</option> <option value="worship">Kegiatan Ibadah</option> <option value="academic">Kegiatan Akademik</option> <option value="other">Lainnya</option> </select> </div>
+                    <div><label for="leave-date" class="block text-sm font-medium text-slate-600 mb-1">Tanggal Izin</label> <input type="date" id="leave-date" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"></div>
+                    <div><label for="leave-reason" class="block text-sm font-medium text-slate-600 mb-1">Alasan <span class="text-red-500">*</span></label> <textarea id="leave-reason" rows="3" placeholder="Jelaskan alasan Anda..." class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm resize-none"></textarea></div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-2">Dokumen Pendukung</label>
+                        <div onclick="document.getElementById('doc-input').click()" id="doc-area" class="border-2 border-dashed border-slate-200 rounded-xl p-5 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+                            <i data-lucide="upload" style="width:28px;height:28px;margin:0 auto;" class="text-slate-400 mb-1"></i>
+                            <p id="doc-text" class="text-sm text-slate-500">Lampirkan Dokumen</p>
+                        </div>
+                        <input type="file" id="doc-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="hidden">
+                    </div>
+                    <button id="btn-submit-leave" onclick="submitLeave()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all flex items-center justify-center gap-2"> <i data-lucide="send" style="width:18px;height:18px"></i> Submit Izin </button>
+                </div>
+            </div>
+          </section>
+          <!-- History Section -->
+          <section id="section-history" class="p-6 hidden">
+            <div class="max-w-lg mx-auto">
+              <h2 class="text-lg font-semibold text-slate-700 mb-4">Riwayat</h2>
+              <div id="history-list" class="space-y-3"><p class="text-sm text-slate-400 text-center py-8">Belum ada data.</p></div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ADMIN/AD/MPM VIEW -->
+      <div id="management-view" class="hidden flex-1 w-full flex flex-col overflow-hidden">
+        <!-- Admin Tabs -->
+        <nav class="bg-white px-6 flex gap-4 border-b border-slate-100 overflow-x-auto flex-shrink-0">
+          <button id="tab-dashboard" class="py-3 text-sm tab-active transition-all whitespace-nowrap" onclick="switchManagementTab('dashboard')"> <span class="flex items-center gap-2"><i data-lucide="bar-chart-2" style="width:16px;height:16px"></i> Dashboard</span> </button>
+          <button id="tab-schedule" class="py-3 text-sm tab-inactive transition-all whitespace-nowrap" onclick="switchManagementTab('schedule')"> <span class="flex items-center gap-2"><i data-lucide="calendar" style="width:16px;height:16px"></i> Jadwal</span> </button>
+          <button id="tab-requests" class="py-3 text-sm tab-inactive transition-all whitespace-nowrap" onclick="switchManagementTab('requests')"> <span class="flex items-center gap-2"><i data-lucide="file-text" style="width:16px;height:16px"></i> Pengajuan</span> </button>
+        </nav>
+        <!-- Admin Content -->
+        <div class="flex-1 overflow-auto">
+          <!-- Dashboard Section -->
+          <section id="section-dashboard" class="p-6">
+            <div class="max-w-4xl mx-auto">
+              <h2 class="text-lg font-semibold text-slate-700 mb-4">Rekapan Absensi</h2>
+              <div class="bg-white rounded-lg p-4 mb-4 border border-slate-100 flex gap-3 items-center"><label class="text-sm font-medium text-slate-600 whitespace-nowrap">Bulan:</label> <input type="month" id="month-filter" class="border border-slate-200 rounded-lg px-3 py-2 text-sm"></div>
+              <div id="dashboard-content" class="space-y-4"><p class="text-sm text-slate-400 text-center py-8">Pilih bulan untuk melihat data.</p></div>
+            </div>
+          </section>
+          <!-- Schedule Section -->
+          <section id="section-schedule" class="p-6 hidden">
+            <div class="max-w-2xl mx-auto">
+              <h2 class="text-lg font-semibold text-slate-700 mb-4">Kelola Jadwal Latihan</h2>
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 space-y-4 mb-6">
+                <div><label class="block text-sm font-medium text-slate-600 mb-1">Tanggal</label> <input type="date" id="schedule-date" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"></div>
+                <div class="grid grid-cols-2 gap-4">
+                  <div><label class="block text-sm font-medium text-slate-600 mb-1">Waktu Mulai</label> <input type="time" id="schedule-start-time" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"></div>
+                  <div><label class="block text-sm font-medium text-slate-600 mb-1">Waktu Selesai</label> <input type="time" id="schedule-end-time" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"></div>
+                </div>
+                <div><label class="block text-sm font-medium text-slate-600 mb-1" title="Contoh: Isi 15 agar absen bisa dimulai 15 menit sebelum jadwal.">Absen Bisa Dimulai (menit sebelum jadwal)</label> <input type="number" id="schedule-grace" value="15" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"></div>
+                <div><label class="block text-sm font-medium text-slate-600 mb-1">Keterangan Agenda</label> <input type="text" id="schedule-note" placeholder="Contoh: Latihan vokal, Rehearsal, dll" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm"></div>
+                <button onclick="addSchedule()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all flex items-center justify-center gap-2"> <i data-lucide="plus" style="width:18px;height:18px"></i> Tambah Jadwal </button>
+              </div>
+              <div>
+                <h3 class="text-md font-semibold text-slate-700 mb-3">Jadwal Saat Ini</h3>
+                <div id="schedule-list" class="space-y-2"><p class="text-sm text-slate-400 text-center py-4">Belum ada jadwal.</p></div>
+              </div>
+            </div>
+          </section>
+          <!-- Requests Section -->
+          <section id="section-requests" class="p-6 hidden">
+            <div class="max-w-3xl mx-auto">
+              <h2 class="text-lg font-semibold text-slate-700 mb-4">Pengajuan Izin</h2>
+              <div id="requests-list" class="space-y-3"><p class="text-sm text-slate-400 text-center py-8">Tidak ada pengajuan izin.</p></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-5 py-3 rounded-lg shadow-lg text-sm font-medium hidden toast"></div>
+  
+<script>
+// --- STATE MANAGEMENT ---
+let currentUser = null;
+let allUsers = []; // To enforce unique email
+let allRecords = []; // From dataSdk
+let schedules = []; // From localStorage
+let liveClockInterval = null;
+
+const MANAGEMENT_PASSWORD = "fixGP";
+
+// --- Google Sheets dataSdk ---
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_wbuscDSSnNxto4ydphuJlOfHTxyoE6K4X4JQVsl18CUXi93clRifpYsnoZx5iBsP/exec";
+
+window.dataSdk = {
+    init: async (handler) => {
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const result = await response.json();
+
+            if (result.status !== 'success') {
+              throw new Error(result.message || 'Failed to fetch data');
+            }
+            
+            const attendance = (result.data.attendance || []).map(r => ({
+                record_type: 'attendance',
+                __backendId: r['ID Absen'],
+                email: r['Email'],
+                name: r['Nama'],
+                date: getLocalDateString(new Date(r['Tanggal Absen'])),
+                time: r['Waktu Absen'],
+                minutes_late: r['Menit Telat'],
+                photo_url: r['Foto Bukti'],
+                status: r['Status'],
+                created_at: r['Timestamp']
+            }));
+
+            const leave = (result.data.leave || []).map(r => ({
+                record_type: 'leave',
+                __backendId: r['ID Izin'],
+                email: r['Email'],
+                name: r['Nama'],
+                date: getLocalDateString(new Date(r['Tanggal Izin'])),
+                reason: r['Alasan'],
+                leave_type: r['Tipe Izin'],
+                doc_url: r['URL Dokumen'],
+                doc_filename: r['URL Dokumen'] ? 'document' : null,
+                doc_is_image: r['Tipe Dokumen'] === 'Gambar',
+                status: r['Status Izin'],
+                created_at: r['Timestamp']
+            }));
+            
+            allRecords = [...attendance, ...leave];
+            handler.onDataChanged(allRecords);
+        } catch (error) {
+            console.error("Error initializing data from Google Sheet:", error);
+            showToast("Gagal memuat data dari server. Pastikan URL dan skrip sudah benar.", true);
+            handler.onDataChanged([]);
+        }
+    },
+    create: async (record) => {
+        try {
+            await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ action: 'create', payload: record }) 
+            });
+            alert("Absensi berhasil terkirim!");
+            setTimeout(() => window.dataSdk.init(window.dataSdk.handler), 1500); 
+            return { isOk: true };
+        } catch (error) {
+            console.error("Error creating record:", error);
+            showToast("Gagal mengirim data.", true);
+            return { isOk: false };
+        }
+    },
+    update: async (record) => {
+         try {
+            await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ action: 'update', payload: record }) 
+            });
+            alert("Status berhasil diupdate!");
+            setTimeout(() => window.dataSdk.init(window.dataSdk.handler), 1500); 
+            return { isOk: true };
+        } catch (error) {
+            console.error("Error updating record:", error);
+            showToast("Gagal mengupdate status.", true);
+            return { isOk: false };
+        }
+    }
+};
+
+if(window.dataSdk) {
+    const originalInit = window.dataSdk.init;
+    window.dataSdk.init = (handler) => {
+        window.dataSdk.handler = handler;
+        originalInit(handler);
+    };
+}
+
+window.elementSdk = { init: () => {}, };
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+    loadSchedules();
+    tryAutoLogin();
+    lucide.createIcons();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    document.getElementById('photo-input-attendance').addEventListener('change', handleFileUpload.bind(null, 'photo-input-attendance', 'photo-preview-attendance', 'photo-icon-attendance', 'photo-text', "Foto: "));
+    document.getElementById('doc-input').addEventListener('change', handleFileUpload.bind(null, 'doc-input', null, null, 'doc-text', "Dokumen: "));
+
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'schedules') {
+            loadSchedules(); 
+            if (currentUser?.role === 'singer') {
+                updateSingerScheduleInfo();
+                renderSingerScheduleList();
+            } else if (['admin', 'ad', 'mpm'].includes(currentUser?.role)) {
+                renderScheduleList();
+            }
+        }
+    });
+}
+
+function tryAutoLogin() {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        if (!currentUser.role) {
+            document.getElementById('login-screen').classList.add('hidden');
+            showRoleSelection();
+            return;
+        }
+        initializeAppView();
+    } else {
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('main-app').classList.add('hidden');
+    }
+}
+
+function initializeAppView() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.remove('hidden');
+
+    document.getElementById('user-name').textContent = currentUser.name;
+    document.getElementById('user-role').textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+
+    if (currentUser.role === 'singer') {
+        document.getElementById('singer-view').classList.remove('hidden');
+        document.getElementById('management-view').classList.add('hidden');
+        loadSingerView();
+    } else if (['admin', 'ad', 'mpm'].includes(currentUser.role)) {
+        document.getElementById('management-view').classList.remove('hidden');
+        document.getElementById('singer-view').classList.add('hidden');
+        loadManagementView();
+    }
+
+    if(window.dataSdk) {
+        window.dataSdk.init({
+            onDataChanged(data) {
+                allRecords = data || [];
+                if (currentUser?.role === 'singer') {
+                  renderHistory();
+                  renderLeaveRequests(); // Also render for singer to see status
+                } else if (['admin', 'ad', 'mpm'].includes(currentUser?.role)) {
+                  renderDashboard();
+                  renderLeaveRequests();
+                }
+            }
+        });
+    }
+    lucide.createIcons();
+}
+
+// --- AUTH & LOGIN ---
+function handleLogin(event) {
+    event.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const name = document.getElementById('login-name').value.trim();
+
+    if (!email || !name) {
+        showToast('Email and name are required.', true);
+        return;
+    }
+
+    const existingUser = allUsers.find(u => u.email === email);
+    if (existingUser && existingUser.name !== name) {
+        showToast('This email is already registered with another name.', true);
+        return;
+    }
+
+    if (!existingUser) {
+        allUsers.push({ email, name });
+        saveUsers();
+    }
+
+    currentUser = { email, name, role: null };
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    document.getElementById('login-screen').classList.add('hidden');
+    showRoleSelection();
+}
+
+function showRoleSelection() {
+    const modal = createModal(`
+        <h2 class="text-xl font-bold text-slate-800 mb-2">Select Your Role</h2>
+        <p class="text-sm text-slate-500 mb-6">Who are you?</p>
+        <div class="space-y-3">
+            <button onclick="selectRole('singer')" class="w-full bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg p-4 text-left transition-all"><p class="font-semibold text-blue-900">🎤 Singer</p></button>
+            <button onclick="selectRole('ad')" class="w-full bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-lg p-4 text-left transition-all"><p class="font-semibold text-green-900">🎨 Art Director</p></button>
+            <button onclick="selectRole('mpm')" class="w-full bg-yellow-50 hover:bg-yellow-100 border-2 border-yellow-200 rounded-lg p-4 text-left transition-all"><p class="font-semibold text-yellow-900">👑 MPM</p></button>
+            <button onclick="selectRole('admin')" class="w-full bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 rounded-lg p-4 text-left transition-all"><p class="font-semibold text-emerald-900">👨‍💼 Admin</p></button>
+        </div>
+    `);
+    document.body.appendChild(modal);
+}
+
+function selectRole(role) {
+    document.querySelector('.modal-overlay')?.remove();
+    currentUser.role = role;
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+    if (['admin', 'ad', 'mpm'].includes(role)) {
+        promptForPassword();
+    } else {
+        initializeAppView();
+    }
+}
+
+function promptForPassword() {
+    const modal = createModal(`
+        <h2 class="text-xl font-bold text-slate-800 mb-4">Enter Password</h2>
+        <form id="password-form">
+            <input type="password" id="role-password" class="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm" required>
+            <button type="submit" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg">Continue</button>
+        </form>
+    `);
+    document.body.appendChild(modal);
+    document.getElementById('password-form').onsubmit = (e) => {
+        e.preventDefault();
+        const password = document.getElementById('role-password').value;
+        if (password === MANAGEMENT_PASSWORD) {
+            document.querySelector('.modal-overlay')?.remove();
+            initializeAppView();
+        } else {
+            showToast('Incorrect password.', true);
+            logout();
+        }
+    };
+}
+
+function logout() {
+    localStorage.removeItem('currentUser');
+    currentUser = null;
+    if(liveClockInterval) clearInterval(liveClockInterval);
+
+    document.getElementById('main-app').classList.add('hidden');
+    document.getElementById('singer-view').classList.add('hidden');
+    document.getElementById('management-view').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+
+    document.getElementById('login-form').reset();
+}
+
+// --- DATE HELPERS ---
+function getLocalDateString(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getLocalMonthString(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    return `${year}-${month}`;
+}
+
+// --- SINGER VIEW ---
+function loadSingerView() {
+    loadSchedules();
+    const today = new Date();
+    document.getElementById('leave-date').valueAsDate = today;
+
+    const clockEl = document.getElementById('live-clock');
+    const dateEl = document.getElementById('live-date');
+    if(liveClockInterval) clearInterval(liveClockInterval);
+    liveClockInterval = setInterval(() => {
+        const now = new Date();
+        clockEl.textContent = now.toLocaleTimeString('en-GB');
+        dateEl.textContent = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }, 1000);
+
+    updateSingerScheduleInfo();
+    renderHistory();
+    renderSingerScheduleList();
+    switchTab('attendance');
+}
+
+function updateSingerScheduleInfo() {
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+    const todaysSchedule = schedules.find(s => s.date === todayStr);
+    const infoEl = document.getElementById('current-schedule-info');
+    const submitBtn = document.getElementById('btn-submit-att');
+
+    if (todaysSchedule) {
+        infoEl.innerHTML = `
+            <p class="font-semibold text-sm text-blue-800">Jadwal Latihan Hari Ini:</p>
+            <p class="text-sm text-blue-700">${todaysSchedule.note} pukul ${todaysSchedule.startTime} - ${todaysSchedule.endTime}</p>
+        `;
+        infoEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+    } else {
+        infoEl.innerHTML = `<p class="font-semibold text-sm text-blue-800">Tidak ada jadwal latihan hari ini.</p>`;
+        infoEl.classList.remove('hidden');
+        submitBtn.disabled = true;
+    }
+}
+
+async function submitAttendance() {
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+    const currentTimeStr = now.toTimeString().slice(0, 5);
+    const photoFile = document.getElementById('photo-input-attendance').files[0];
+
+    if (!photoFile) {
+        showToast("Mohon lampirkan foto validasi.", true);
+        return;
+    }
+
+    const todaysSchedule = schedules.find(s => s.date === todayStr);
+    if (!todaysSchedule) {
+        showToast("Tidak ada jadwal untuk diabsen hari ini.", true);
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-att');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> Mengirim...';
+    lucide.createIcons();
+
+    const earlyCheckinMinutes = todaysSchedule.grace || 15;
+    const scheduleStart = new Date(`${todaysSchedule.date}T${todaysSchedule.startTime}:00`);
+    const scheduleEnd = new Date(`${todaysSchedule.date}T${todaysSchedule.endTime}:00`);
+    const checkinStart = new Date(scheduleStart.getTime() - earlyCheckinMinutes * 60000);
+
+    if (now < checkinStart || now > scheduleEnd) {
+        showToast(`Absen hanya bisa dilakukan antara ${checkinStart.toLocaleTimeString('en-GB')} dan ${scheduleEnd.toLocaleTimeString('en-GB')}.`, true);
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check-circle" style="width:18px;height:18px"></i> Submit Absensi';
+        lucide.createIcons();
+        return;
+    }
+
+    let minutesLate = 0;
+    if (now > scheduleStart) {
+        minutesLate = Math.round((now - scheduleStart) / 60000);
+    }
+
+    const photoDataUrl = await fileToDataUrl(photoFile);
+
+    const status = minutesLate > 0 ? `Late (${minutesLate} min)` : 'On-time';
+
+    const result = await window.dataSdk.create({
+        record_type: 'attendance',
+        email: currentUser.email,
+        name: currentUser.name,
+        date: todayStr,
+        time: currentTimeStr,
+        minutes_late: minutesLate,
+        photo_url: photoDataUrl,
+        status: status,
+        created_at: new Date().toISOString()
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="check-circle" style="width:18px;height:18px"></i> Submit Absensi';
+    lucide.createIcons();
+
+    if (result.isOk) {
+        // The alert is now inside dataSdk.create, but we can keep the toast for better UI
+        showToast(`Absensi berhasil! Status: ${status}`);
+        document.getElementById('photo-input-attendance').value = '';
+        document.getElementById('photo-preview-attendance').classList.add('hidden');
+        document.getElementById('photo-icon-attendance').classList.remove('hidden');
+        document.getElementById('photo-text').textContent = 'Ambil/Upload Foto';
+    } else {
+        showToast('Gagal mengirim absensi', true);
+    }
+}
+
+async function submitLeave() {
+    const leaveType = document.getElementById('leave-type').value;
+    const date = document.getElementById('leave-date').value;
+    const reason = document.getElementById('leave-reason').value.trim();
+    const docFile = document.getElementById('doc-input').files[0];
+
+    if (!leaveType || !date || !reason) {
+        showToast('Mohon isi semua field yang wajib.', true);
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-leave');
+    btn.disabled = true;
+    btn.textContent = 'Mengirim...';
+
+    let docDataUrl = null;
+    let isImage = false;
+    if (docFile) {
+        docDataUrl = await fileToDataUrl(docFile);
+        isImage = docFile.type.startsWith('image/');
+    }
+
+    const result = await window.dataSdk.create({
+        record_type: 'leave',
+        email: currentUser.email,
+        name: currentUser.name,
+        date,
+        reason,
+        leave_type: leaveType,
+        doc_url: docDataUrl,
+        doc_filename: docFile?.name || null,
+        doc_is_image: isImage,
+        status: 'pending',
+        created_at: new Date().toISOString()
+    });
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="send" style="width:18px;height:18px"></i> Submit Izin';
+    lucide.createIcons();
+
+    if (result.isOk) {
+        showToast('Pengajuan izin berhasil dikirim!');
+        document.getElementById('leave-type').value = '';
+        document.getElementById('leave-reason').value = '';
+        document.getElementById('doc-input').value = '';
+        document.getElementById('doc-text').textContent = 'Lampirkan Dokumen';
+    } else {
+        showToast('Gagal mengirim izin', true);
+    }
+}
+
+// --- MANAGEMENT VIEW (Admin, AD, MPM) ---
+function loadManagementView() {
+    loadSchedules();
+    const today = new Date();
+    const yearMonth = getLocalMonthString(today);
+    document.getElementById('month-filter').value = yearMonth;
+    document.getElementById('month-filter').addEventListener('change', renderDashboard);
+
+    const canManageSchedules = ['admin', 'ad'].includes(currentUser.role);
+    document.getElementById('tab-schedule').style.display = canManageSchedules ? 'flex' : 'none';
+
+    renderDashboard();
+    renderScheduleList();
+    renderLeaveRequests();
+    switchManagementTab('dashboard');
+}
+
+function addSchedule() {
+    const date = document.getElementById('schedule-date').value;
+    const startTime = document.getElementById('schedule-start-time').value;
+    const endTime = document.getElementById('schedule-end-time').value;
+    const grace = document.getElementById('schedule-grace').value;
+    const note = document.getElementById('schedule-note').value;
+
+    if (!date || !startTime || !endTime) {
+        showToast('Tanggal, waktu mulai, dan waktu selesai harus diisi.', true);
+        return;
+    }
+
+    schedules.push({ date, startTime, endTime, grace: parseInt(grace), note, id: Date.now() });
+    saveSchedules();
+
+    showToast('Jadwal berhasil ditambahkan!');
+    renderScheduleList();
+    
+    document.getElementById('schedule-date').value = '';
+    document.getElementById('schedule-start-time').value = '';
+    document.getElementById('schedule-end-time').value = '';
+    document.getElementById('schedule-note').value = '';
+}
+
+function deleteSchedule(id) {
+    schedules = schedules.filter(s => s.id !== id);
+    saveSchedules();
+    renderScheduleList();
+    showToast('Jadwal dihapus.');
+}
+
+// --- RENDERING ---
+function renderDashboard() {
+    const monthFilter = document.getElementById('month-filter').value;
+    const filtered = allRecords.filter(r => r.record_type === 'attendance' && r.date.startsWith(monthFilter));
+
+    const contentEl = document.getElementById('dashboard-content');
+    if (filtered.length === 0) {
+        contentEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Tidak ada data untuk bulan ini.</p>';
+        return;
+    }
+
+    const groupedByPerson = filtered.reduce((acc, r) => {
+        if (!acc[r.name]) acc[r.name] = [];
+        acc[r.name].push(r);
+        return acc;
+    }, {});
+
+    contentEl.innerHTML = Object.entries(groupedByPerson).map(([name, records]) => {
+      const sortedRecords = records.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        return `
+        <div class="bg-white rounded-lg p-5 border border-slate-100 shadow-sm">
+          <h3 class="font-semibold text-slate-700 mb-3">${name}</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${sortedRecords.map(r => `
+              <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <img src="${r.photo_url}" class="w-16 h-16 rounded-md object-cover cursor-pointer" onclick="showImageModal('${r.photo_url}')"/>
+                <div>
+                  <p class="text-sm font-medium text-slate-800">${r.date} - ${r.time}</p>
+                  <p class="text-xs font-semibold ${r.status.startsWith('Late') ? 'text-red-600' : 'text-green-600'}">${r.status}</p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `}).join('');
+}
+
+function renderLeaveRequests() {
+    const list = document.getElementById('requests-list');
+    const leaveRequests = allRecords.filter(r => r.record_type === 'leave').sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (leaveRequests.length === 0) {
+        list.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Tidak ada pengajuan izin.</p>';
+        return;
+    }
+    list.innerHTML = leaveRequests.map(req => {
+        const canApprove = ['admin', 'ad'].includes(currentUser.role);
+        let docButton = '';
+        if (req.doc_url) {
+            if (req.doc_is_image) {
+                docButton = `<button onclick="showImageModal('${req.doc_url}')" class="flex items-center gap-2 text-sm text-blue-600 hover:underline"><i data-lucide="paperclip" class="w-4 h-4"></i> Lihat Bukti Izin</button>`;
+            } else {
+                docButton = `<a href="${req.doc_url}" target="_blank" download="${req.doc_filename || 'document'}" class="flex items-center gap-2 text-sm text-blue-600 hover:underline"><i data-lucide="paperclip" class="w-4 h-4"></i> Unduh Bukti Izin</a>`;
+            }
+        }
+        const statusColors = {
+          pending: 'bg-yellow-100 text-yellow-800',
+          approved: 'bg-green-100 text-green-800',
+          rejected: 'bg-red-100 text-red-800',
+        }
+
+        return `
+          <div class="bg-white rounded-lg p-4 border border-slate-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="font-semibold text-slate-700">${req.name}</p>
+                <p class="text-sm text-slate-500">${req.leave_type} on ${req.date}</p>
+              </div>
+              <span class="text-xs font-medium px-2 py-1 rounded-full ${statusColors[req.status] || 'bg-gray-100'}">${req.status}</span>
+            </div>
+            <p class="text-sm text-slate-600 bg-slate-50 p-3 rounded-md">${req.reason}</p>
+            ${docButton}
+            ${req.status === 'pending' && canApprove ? `
+              <div class="flex gap-2 pt-2">
+                <button onclick="updateRequestStatus('${req.__backendId}', 'approved')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2 rounded-lg">Setujui</button>
+                <button onclick="updateRequestStatus('${req.__backendId}', 'rejected')" class="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 rounded-lg">Tolak</button>
+              </div>` : ''}
+          </div>
+        `;
+    }).join('');
+    lucide.createIcons();
+}
+
+function renderHistory() {
+    const list = document.getElementById('history-list');
+    const userRecords = allRecords.filter(r => r.email === currentUser.email).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    if(userRecords.length === 0){
+        list.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Belum ada riwayat.</p>`;
+        return;
+    }
+    list.innerHTML = userRecords.map(r => {
+       const isAttendance = r.record_type === 'attendance';
+       const title = isAttendance ? `Absensi (${r.status})` : `Izin Diajukan (${r.leave_type})`;
+       const icon = isAttendance ? 'clock' : 'file-text';
+       const statusColors = {
+          pending: 'bg-yellow-100 text-yellow-800',
+          approved: 'bg-green-100 text-green-800',
+          rejected: 'bg-red-100 text-red-800',
+          'On-time': 'bg-green-100 text-green-800',
+        }
+
+       return `
+        <div class="bg-white rounded-lg p-4 border border-slate-100 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center">
+                        <i data-lucide="${icon}" class="w-4 h-4 text-blue-600"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-700">${title}</p>
+                        <p class="text-xs text-slate-400">${r.date} ${isAttendance ? '· '+r.time : ''}</p>
+                    </div>
+                </div>
+                <span class="text-xs font-medium px-2 py-1 rounded-full ${statusColors[r.status] || (r.status.startsWith('Late') ? 'bg-red-100 text-red-700' : 'bg-gray-100')}">${r.status}</span>
+            </div>
+            ${r.reason ? `<p class="text-xs text-slate-500 mt-2 pl-12">${r.reason}</p>` : ''}
+        </div>
+       `
+    }).join('');
+    lucide.createIcons();
+}
+
+function renderScheduleList() {
+    const list = document.getElementById('schedule-list');
+    const canManage = ['admin', 'ad'].includes(currentUser.role);
+    if (schedules.length === 0) {
+        list.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Belum ada jadwal.</p>';
+        return;
+    }
+    const sorted = [...schedules].sort((a,b) => new Date(b.date) - new Date(a.date));
+    list.innerHTML = sorted.map(s => `
+        <div class="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <div>
+            <p class="text-sm font-medium text-slate-700">${s.date} (${s.startTime} - ${s.endTime})</p>
+            <p class="text-xs text-slate-500 mt-1">${s.note || 'No description'}</p>
+          </div>
+          ${canManage ? `<button onclick="deleteSchedule(${s.id})" class="text-red-500 hover:text-red-700 text-sm"><i data-lucide="trash-2" style="width:16px;height:16px"></i></button>` : ''}
+        </div>
+    `).join('');
+    lucide.createIcons();
+}
+
+function renderSingerScheduleList() {
+    const list = document.getElementById('singer-schedule-list');
+    if (schedules.length === 0) {
+        list.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Belum ada jadwal.</p>';
+        return;
+    }
+    const sorted = [...schedules].sort((a,b) => new Date(b.date) - new Date(a.date));
+    list.innerHTML = sorted.map(s => `
+        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+          <div>
+            <p class="text-sm font-medium text-slate-700">${s.date} (${s.startTime} - ${s.endTime})</p>
+            <p class="text-xs text-slate-500 mt-1">${s.note || 'No description'}</p>
+          </div>
+        </div>
+    `).join('');
+}
+
+async function updateRequestStatus(recordId, status) {
+    const record = allRecords.find(r => r.__backendId === recordId);
+    if (!record) return;
+
+    record.status = status;
+    const result = await window.dataSdk.update(record);
+    if (result.isOk) {
+        showToast(`Request has been ${status}.`);
+    } else {
+        showToast('Failed to update status.', true);
+    }
+}
+
+
+// --- TABS & NAVIGATION ---
+function switchTab(tab) {
+    ['attendance', 'singer-schedule', 'leave', 'history'].forEach(t => {
+        document.getElementById(`section-${t}`).classList.toggle('hidden', t !== tab);
+        document.getElementById(`tab-${t}`).classList.toggle('tab-active', t === tab);
+        document.getElementById(`tab-${t}`).classList.toggle('tab-inactive', t !== tab);
+    });
+}
+function switchManagementTab(tab) {
+    ['dashboard', 'schedule', 'requests'].forEach(t => {
+        document.getElementById(`section-${t}`).classList.toggle('hidden', t !== tab);
+        document.getElementById(`tab-${t}`).classList.toggle('tab-active', t === tab);
+        document.getElementById(`tab-${t}`).classList.toggle('tab-inactive', t !== tab);
+    });
+}
+
+// --- UTILITIES & HELPERS ---
+function loadUsers() {
+    const saved = localStorage.getItem('allUsers');
+    allUsers = saved ? JSON.parse(saved) : [];
+}
+function saveUsers() {
+    localStorage.setItem('allUsers', JSON.stringify(allUsers));
+}
+function loadSchedules() {
+    const saved = localStorage.getItem('schedules');
+    schedules = saved ? JSON.parse(saved) : [];
+}
+function saveSchedules() {
+    localStorage.setItem('schedules', JSON.stringify(schedules));
+}
+
+function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `fixed bottom-6 left-1/2 -translate-x-1/2 ${isError ? 'bg-red-500' : 'bg-emerald-600'} text-white px-5 py-3 rounded-lg shadow-lg text-sm font-medium toast`;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 3000);
+}
+
+function createModal(innerHTML) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">${innerHTML}</div>`;
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    return modal;
+}
+
+function showImageModal(src) {
+    const modal = createModal(`<img src="${src}" class="max-w-full max-h-[80vh] rounded-lg"/>`);
+    document.body.appendChild(modal);
+}
+
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function handleFileUpload(inputId, previewId, iconId, textId, textPrefix) {
+    const file = document.getElementById(inputId).files[0];
+    if (!file) return;
+
+    if (previewId && file.type.startsWith('image/')) {
+        fileToDataUrl(file).then(url => {
+            const previewEl = document.getElementById(previewId);
+            previewEl.src = url;
+            previewEl.classList.remove('hidden');
+            if (iconId) document.getElementById(iconId).classList.add('hidden');
+        });
+    }
+
+    const textEl = document.getElementById(textId);
+    textEl.textContent = textPrefix + file.name;
+}
+</script>
+</body>
+</html>
